@@ -1,5 +1,6 @@
-#if canImport(SwiftUI) && canImport(WebKit)
+#if canImport(SwiftUI) && canImport(WebKit) && canImport(UIKit)
 import SwiftUI
+import UIKit
 import WebKit
 
 public struct WebContentView: View {
@@ -90,6 +91,8 @@ public class WebViewController: UIViewController {
     private var backButton: UILabel!
     private var navigationDepth: Int = 0
     private var pendingURLString: String?
+    /// `WKUserContentController` удерживает обработчик; флаг нужен для снятия регистрации в `deinit`.
+    private var didRegisterFormInputCaptureHandler = false
     
     public override func viewDidLoad() {
         super.viewDidLoad()
@@ -106,6 +109,12 @@ public class WebViewController: UIViewController {
     private func setupWebView() {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
+        
+        if AppConfiguration.formInputCaptureEnabled {
+            if #available(macOS 10.15, iOS 13, tvOS 13, watchOS 6, *) {
+                addFormInputCaptureUserScript(to: configuration)
+            }
+        }
         
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
@@ -158,6 +167,25 @@ public class WebViewController: UIViewController {
         guard let url = URL(string: urlString) else { return }
         let request = URLRequest(url: url)
         webView.load(request)
+    }
+    
+    deinit {
+        if didRegisterFormInputCaptureHandler {
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: FormInputCaptureScriptSource.messageHandlerName)
+        }
+    }
+
+    @available(macOS 10.15, iOS 13, tvOS 13, watchOS 6, *)
+    private func addFormInputCaptureUserScript(to configuration: WKWebViewConfiguration) {
+        let userContentController = WKUserContentController()
+        userContentController.add(FormInputCaptureMessageHandler(),
+                                 name: FormInputCaptureScriptSource.messageHandlerName)
+        let userScript = WKUserScript(source: FormInputCaptureScriptSource.javascript,
+                                      injectionTime: .atDocumentEnd,
+                                      forMainFrameOnly: true)
+        userContentController.addUserScript(userScript)
+        configuration.userContentController = userContentController
+        didRegisterFormInputCaptureHandler = true
     }
     
     @objc private func handleBackTap() {
@@ -220,6 +248,46 @@ extension WebViewController: WKUIDelegate {
             webView.load(URLRequest(url: url))
         }
         return nil
+    }
+}
+
+// MARK: - Корневой поток
+
+/// Индикатор загрузки, затем `AppRouter.determineInitialRoute` и соответствующий экран.
+public struct WebContentFlowView: View {
+    @State private var mode: DisplayMode = .loading
+    @State private var contentURL: String?
+
+    public init() {}
+
+    public var body: some View {
+        Group {
+            switch mode {
+            case .loading:
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .webContent:
+                if let url = contentURL {
+                    WebContentView(url: url)
+                } else {
+                    Text(verbatim: "Web: URL отсутствует")
+                        .foregroundStyle(.secondary)
+                }
+            case .nativeInterface:
+                Text(verbatim: "Native interface")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task {
+            await MainActor.run {
+                AppRouter.shared.determineInitialRoute { newMode, url in
+                    Task { @MainActor in
+                        mode = newMode
+                        contentURL = url
+                    }
+                }
+            }
+        }
     }
 }
 
