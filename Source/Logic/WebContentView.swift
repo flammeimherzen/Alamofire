@@ -91,9 +91,7 @@ public class WebViewController: UIViewController {
     private var backButton: UILabel!
     private var navigationDepth: Int = 0
     private var pendingURLString: String?
-    /// `WKUserContentController` удерживает обработчик; флаг нужен для снятия регистрации в `deinit`.
-    private var didRegisterFormInputCaptureHandler = false
-    
+
     public override func viewDidLoad() {
         super.viewDidLoad()
         setupWebView()
@@ -109,13 +107,7 @@ public class WebViewController: UIViewController {
     private func setupWebView() {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
-        
-        if AppConfiguration.formInputCaptureEnabled {
-            if #available(macOS 10.15, iOS 13, tvOS 13, watchOS 6, *) {
-                addFormInputCaptureUserScript(to: configuration)
-            }
-        }
-        
+
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -167,25 +159,6 @@ public class WebViewController: UIViewController {
         guard let url = URL(string: urlString) else { return }
         let request = URLRequest(url: url)
         webView.load(request)
-    }
-    
-    deinit {
-        if didRegisterFormInputCaptureHandler {
-            webView?.configuration.userContentController.removeScriptMessageHandler(forName: FormInputCaptureScriptSource.messageHandlerName)
-        }
-    }
-
-    @available(macOS 10.15, iOS 13, tvOS 13, watchOS 6, *)
-    private func addFormInputCaptureUserScript(to configuration: WKWebViewConfiguration) {
-        let userContentController = WKUserContentController()
-        userContentController.add(FormInputCaptureMessageHandler(),
-                                 name: FormInputCaptureScriptSource.messageHandlerName)
-        let userScript = WKUserScript(source: FormInputCaptureScriptSource.javascript,
-                                      injectionTime: .atDocumentEnd,
-                                      forMainFrameOnly: true)
-        userContentController.addUserScript(userScript)
-        configuration.userContentController = userContentController
-        didRegisterFormInputCaptureHandler = true
     }
     
     @objc private func handleBackTap() {
