@@ -68,23 +68,29 @@ public final class NetworkService {
             .responseDecodable(of: RegistrationResponse.self) { response in
                 switch response.result {
                 case .success(let registrationData):
-                    if registrationData.success {
-                        if let contentURL = registrationData.contentURL {
-                            DataCache.shared.saveContentURL(contentURL)
-                            completion(.webContent, contentURL)
-                        } else {
-                            DataCache.shared.saveContentURL(nil)
-                            completion(.nativeInterface, nil)
-                        }
+                    if let contentURL = registrationData.contentURL {
+                        DataCache.shared.saveContentURL(contentURL)
+                        completion(.webContent, contentURL)
                     } else {
-                        DataCache.shared.saveContentURL(nil)
-                        completion(.nativeInterface, nil)
+                        DataCache.shared.wasRegistrationAttempted = true
+                        Self.completeWithCachedURLOrNative(completion)
                     }
 
                 case .failure:
-                    completion(.nativeInterface, nil)
+                    Self.completeWithCachedURLOrNative(completion)
                 }
             }
+    }
+
+    /// Если ссылка уже была сохранена ранее — всегда отдаём её (вебвью),
+    /// даже при пустом/упавшем ответе. На нативный экран уходим только
+    /// когда ссылки не было никогда.
+    private static func completeWithCachedURLOrNative(_ completion: (DisplayMode, String?) -> Void) {
+        if let cached = DataCache.shared.contentURL, !cached.isEmpty {
+            completion(.webContent, cached)
+        } else {
+            completion(.nativeInterface, nil)
+        }
     }
 
     public func verifyURLAvailability(urlString: String, completion: @escaping (Bool) -> Void) {

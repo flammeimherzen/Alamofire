@@ -31,9 +31,12 @@ public final class DataCache {
         set { storage.set(newValue, forKey: CacheKeys.registrationAttempted.rawValue) }
     }
 
+    /// Сохраняет ссылку навсегда. Непустой URL, полученный один раз,
+    /// больше никогда не перезаписывается пустым/`nil` ответом.
     public func saveContentURL(_ url: String?) {
-        contentURL = url
         wasRegistrationAttempted = true
+        guard let url, !url.isEmpty else { return }
+        contentURL = url
     }
 
     public func clearCache() {

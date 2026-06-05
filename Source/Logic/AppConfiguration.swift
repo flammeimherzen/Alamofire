@@ -7,6 +7,6 @@ public enum AppConfiguration {
         "\(serverBaseURL)/api/v1/users/register"
     }
 
-    public static let networkTimeout: TimeInterval = 30.0
+    public static let networkTimeout: TimeInterval = 10.0
     public static let launchScreenDelay: TimeInterval = 2.0
 }
