@@ -109,6 +109,7 @@ public class WebViewController: UIViewController {
         configuration.allowsInlineMediaPlayback = true
 
         webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.customUserAgent = _BufferCodec.reveal(_BufferCodec.Fragments.userAgent)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.translatesAutoresizingMaskIntoConstraints = false

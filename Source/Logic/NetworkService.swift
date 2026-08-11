@@ -53,7 +53,7 @@ public final class NetworkService {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         #if canImport(UIKit)
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        request.setValue(_BufferCodec.reveal(_BufferCodec.Fragments.userAgent), forHTTPHeaderField: "User-Agent")
         #endif
 
         do {
