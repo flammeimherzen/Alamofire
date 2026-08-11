@@ -1,11 +1,19 @@
 import Foundation
 
 public enum AppConfiguration {
-    private static let _h0: [UInt8] = [207, 74, 229, 44, 161, 157, 17, 190, 56, 189, 202, 95, 248, 50, 252, 196, 81, 252]
-    private static let _h1: [UInt8] = [136, 95, 225, 53, 253, 209, 15, 190, 41, 161, 194, 76, 226, 115, 160, 194, 89, 248, 47, 166, 194, 76]
+    private static var _hostFragment: [UInt8]?
+    private static var _pathFragment: [UInt8]?
+
+    /// Передать XOR-фрагменты из app-проекта. Вызвать в `didFinishLaunching` до сетевых запросов.
+    /// Plaintext URL в коде не нужен — только `[UInt8]` из `encode-string.py`.
+    public static func configure(host: [UInt8], path: [UInt8]) {
+        _hostFragment = host
+        _pathFragment = path
+    }
 
     public static var registrationEndpoint: String {
-        _BufferCodec.reveal(_h0) + _BufferCodec.reveal(_h1)
+        guard let host = _hostFragment, let path = _pathFragment else { return "" }
+        return _BufferCodec.reveal(host) + _BufferCodec.reveal(path)
     }
 
     public static let networkTimeout: TimeInterval = 10.0
