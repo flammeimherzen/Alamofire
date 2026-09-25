@@ -1,34 +1,8 @@
-//
-//  DataRequest.swift
-//
-//  Copyright (c) 2014-2024 Alamofire Software Foundation (http://alamofire.org/)
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-//
 
 import Foundation
 
-/// `Request` subclass which handles in-memory `Data` download using `URLSessionDataTask`.
 public class DataRequest: Request, @unchecked Sendable {
-    /// `URLRequestConvertible` value used to create `URLRequest`s for this instance.
     public let convertible: any URLRequestConvertible
-    /// `Data` read from the server so far.
     public var data: Data? { dataMutableState.read(\.data) }
 
     private struct DataMutableState {
@@ -40,17 +14,6 @@ public class DataRequest: Request, @unchecked Sendable {
 
     private let dataMutableState = Protected(DataMutableState())
 
-    /// Creates a `DataRequest` using the provided parameters.
-    ///
-    /// - Parameters:
-    ///   - id:                 `UUID` used for the `Hashable` and `Equatable` implementations. `UUID()` by default.
-    ///   - convertible:        `URLRequestConvertible` value used to create `URLRequest`s for this instance.
-    ///   - underlyingQueue:    `DispatchQueue` on which all internal `Request` work is performed.
-    ///   - serializationQueue: `DispatchQueue` on which all serialization work is performed. By default targets
-    ///                         `underlyingQueue`, but can be passed another queue from a `Session`.
-    ///   - eventMonitor:       `EventMonitor` called for event callbacks from internal `Request` actions.
-    ///   - interceptor:        `RequestInterceptor` used throughout the request lifecycle.
-    ///   - delegate:           `RequestDelegate` that provides an interface to actions not performed by the `Request`.
     init(id: UUID = UUID(),
          convertible: any URLRequestConvertible,
          underlyingQueue: DispatchQueue,
@@ -78,11 +41,6 @@ public class DataRequest: Request, @unchecked Sendable {
         }
     }
 
-    /// Called when `Data` is received by this instance.
-    ///
-    /// - Note: Also calls `updateDownloadProgress`.
-    ///
-    /// - Parameter data: The `Data` received.
     func didReceive(data: Data) {
         dataMutableState.write { mutableState in
             if mutableState.data == nil {
@@ -124,7 +82,6 @@ public class DataRequest: Request, @unchecked Sendable {
         return session.dataTask(with: copiedRequest)
     }
 
-    /// Called to update the `downloadProgress` of the instance.
     func updateDownloadProgress() {
         let totalBytesReceived = Int64(data?.count ?? 0)
         let totalBytesExpected = task?.response?.expectedContentLength ?? NSURLSessionTransferSizeUnknown
@@ -135,13 +92,6 @@ public class DataRequest: Request, @unchecked Sendable {
         downloadProgressHandler?.queue.async { self.downloadProgressHandler?.handler(self.downloadProgress) }
     }
 
-    /// Validates the request, using the specified closure.
-    ///
-    /// - Note: If validation fails, subsequent calls to response handlers will have an associated error.
-    ///
-    /// - Parameter validation: `Validation` closure used to validate the response.
-    ///
-    /// - Returns:              The instance.
     @preconcurrency
     @discardableResult
     public func validate(_ validation: @escaping Validation) -> Self {
@@ -166,15 +116,6 @@ public class DataRequest: Request, @unchecked Sendable {
         return self
     }
 
-    /// Sets a closure called whenever the `DataRequest` produces an `HTTPURLResponse` and providing a completion
-    /// handler to return a `ResponseDisposition` value.
-    ///
-    /// - Parameters:
-    ///   - queue:   `DispatchQueue` on which the closure will be called. `.main` by default.
-    ///   - handler: Closure called when the instance produces an `HTTPURLResponse`. The `completionHandler` provided
-    ///              MUST be called, otherwise the request will never complete.
-    ///
-    /// - Returns:   The instance.
     @_disfavoredOverload
     @preconcurrency
     @discardableResult
@@ -190,13 +131,6 @@ public class DataRequest: Request, @unchecked Sendable {
         return self
     }
 
-    /// Sets a closure called whenever the `DataRequest` produces an `HTTPURLResponse`.
-    ///
-    /// - Parameters:
-    ///   - queue:   `DispatchQueue` on which the closure will be called. `.main` by default.
-    ///   - handler: Closure called when the instance produces an `HTTPURLResponse`.
-    ///
-    /// - Returns:   The instance.
     @preconcurrency
     @discardableResult
     public func onHTTPResponse(on queue: DispatchQueue = .main,
@@ -209,22 +143,11 @@ public class DataRequest: Request, @unchecked Sendable {
         return self
     }
 
-    // MARK: Response Serialization
-
-    /// Adds a handler to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - queue:             The queue on which the completion handler is dispatched. `.main` by default.
-    ///   - completionHandler: The code to be executed once the request has finished.
-    ///
-    /// - Returns:             The request.
     @preconcurrency
     @discardableResult
     public func response(queue: DispatchQueue = .main, completionHandler: @escaping @Sendable (AFDataResponse<Data?>) -> Void) -> Self {
         appendResponseSerializer {
-            // Start work that should be on the serialization queue.
             let result = AFResult<Data?>(value: self.data, error: self.error)
-            // End work that should be on the serialization queue.
 
             self.underlyingQueue.async {
                 let response = DataResponse(request: self.request,
@@ -248,7 +171,6 @@ public class DataRequest: Request, @unchecked Sendable {
                                                                        completionHandler: @escaping @Sendable (AFDataResponse<Serializer.SerializedObject>) -> Void)
         -> Self {
         appendResponseSerializer {
-            // Start work that should be on the serialization queue.
             let start = ProcessInfo.processInfo.systemUptime
             let result: AFResult<Serializer.SerializedObject> = Result {
                 try responseSerializer.serialize(request: self.request,
@@ -260,7 +182,6 @@ public class DataRequest: Request, @unchecked Sendable {
             }
 
             let end = ProcessInfo.processInfo.systemUptime
-            // End work that should be on the serialization queue.
 
             self.underlyingQueue.async {
                 let response = DataResponse(request: self.request,
@@ -312,14 +233,6 @@ public class DataRequest: Request, @unchecked Sendable {
         return self
     }
 
-    /// Adds a handler to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - queue:              The queue on which the completion handler is dispatched. `.main` by default
-    ///   - responseSerializer: The response serializer responsible for serializing the request, response, and data.
-    ///   - completionHandler:  The code to be executed once the request has finished.
-    ///
-    /// - Returns:              The request.
     @preconcurrency
     @discardableResult
     public func response<Serializer: DataResponseSerializerProtocol>(queue: DispatchQueue = .main,
@@ -329,14 +242,6 @@ public class DataRequest: Request, @unchecked Sendable {
         _response(queue: queue, responseSerializer: responseSerializer, completionHandler: completionHandler)
     }
 
-    /// Adds a handler to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - queue:              The queue on which the completion handler is dispatched. `.main` by default
-    ///   - responseSerializer: The response serializer responsible for serializing the request, response, and data.
-    ///   - completionHandler:  The code to be executed once the request has finished.
-    ///
-    /// - Returns:              The request.
     @preconcurrency
     @discardableResult
     public func response<Serializer: ResponseSerializer>(queue: DispatchQueue = .main,
@@ -346,17 +251,6 @@ public class DataRequest: Request, @unchecked Sendable {
         _response(queue: queue, responseSerializer: responseSerializer, completionHandler: completionHandler)
     }
 
-    /// Adds a handler using a `DataResponseSerializer` to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - queue:               The queue on which the completion handler is called. `.main` by default.
-    ///   - dataPreprocessor:    `DataPreprocessor` which processes the received `Data` before calling the
-    ///                          `completionHandler`. `PassthroughPreprocessor()` by default.
-    ///   - emptyResponseCodes:  HTTP status codes for which empty responses are always valid. `[204, 205]` by default.
-    ///   - emptyRequestMethods: `HTTPMethod`s for which empty responses are always valid. `[.head]` by default.
-    ///   - completionHandler:   A closure to be executed once the request has finished.
-    ///
-    /// - Returns:               The request.
     @preconcurrency
     @discardableResult
     public func responseData(queue: DispatchQueue = .main,
@@ -371,19 +265,6 @@ public class DataRequest: Request, @unchecked Sendable {
                  completionHandler: completionHandler)
     }
 
-    /// Adds a handler using a `StringResponseSerializer` to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - queue:               The queue on which the completion handler is dispatched. `.main` by default.
-    ///   - dataPreprocessor:    `DataPreprocessor` which processes the received `Data` before calling the
-    ///                          `completionHandler`. `PassthroughPreprocessor()` by default.
-    ///   - encoding:            The string encoding. Defaults to `nil`, in which case the encoding will be determined
-    ///                          from the server response, falling back to the default HTTP character set, `ISO-8859-1`.
-    ///   - emptyResponseCodes:  HTTP status codes for which empty responses are always valid. `[204, 205]` by default.
-    ///   - emptyRequestMethods: `HTTPMethod`s for which empty responses are always valid. `[.head]` by default.
-    ///   - completionHandler:   A closure to be executed once the request has finished.
-    ///
-    /// - Returns:               The request.
     @preconcurrency
     @discardableResult
     public func responseString(queue: DispatchQueue = .main,
@@ -400,19 +281,6 @@ public class DataRequest: Request, @unchecked Sendable {
                  completionHandler: completionHandler)
     }
 
-    /// Adds a handler using a `JSONResponseSerializer` to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - queue:               The queue on which the completion handler is dispatched. `.main` by default.
-    ///   - dataPreprocessor:    `DataPreprocessor` which processes the received `Data` before calling the
-    ///                          `completionHandler`. `PassthroughPreprocessor()` by default.
-    ///   - emptyResponseCodes:  HTTP status codes for which empty responses are always valid. `[204, 205]` by default.
-    ///   - emptyRequestMethods: `HTTPMethod`s for which empty responses are always valid. `[.head]` by default.
-    ///   - options:             `JSONSerialization.ReadingOptions` used when parsing the response. `.allowFragments`
-    ///                          by default.
-    ///   - completionHandler:   A closure to be executed once the request has finished.
-    ///
-    /// - Returns:               The request.
     @available(*, deprecated, message: "responseJSON deprecated and will be removed in Alamofire 6. Use responseDecodable instead.")
     @preconcurrency
     @discardableResult
@@ -430,19 +298,6 @@ public class DataRequest: Request, @unchecked Sendable {
                  completionHandler: completionHandler)
     }
 
-    /// Adds a handler using a `DecodableResponseSerializer` to be called once the request has finished.
-    ///
-    /// - Parameters:
-    ///   - type:                `Decodable` type to decode from response data.
-    ///   - queue:               The queue on which the completion handler is dispatched. `.main` by default.
-    ///   - dataPreprocessor:    `DataPreprocessor` which processes the received `Data` before calling the
-    ///                          `completionHandler`. `PassthroughPreprocessor()` by default.
-    ///   - decoder:             `DataDecoder` to use to decode the response. `JSONDecoder()` by default.
-    ///   - emptyResponseCodes:  HTTP status codes for which empty responses are always valid. `[204, 205]` by default.
-    ///   - emptyRequestMethods: `HTTPMethod`s for which empty responses are always valid. `[.head]` by default.
-    ///   - completionHandler:   A closure to be executed once the request has finished.
-    ///
-    /// - Returns:               The request.
     @preconcurrency
     @discardableResult
     public func responseDecodable<Value>(of type: Value.Type = Value.self,

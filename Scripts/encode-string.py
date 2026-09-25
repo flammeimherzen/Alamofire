@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Кодирует строку для _BufferCodec.reveal([...])."""
 import sys
 
 KEY = [0xA7, 0x3E, 0x91, 0x5C, 0xD2]

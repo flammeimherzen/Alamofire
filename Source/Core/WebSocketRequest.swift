@@ -1,36 +1,8 @@
-//
-//  WebSocketRequest.swift
-//
-//  Copyright (c) 2014-2024 Alamofire Software Foundation (http://alamofire.org/)
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-//
 
-#if canImport(Darwin) && !canImport(FoundationNetworking) // Only Apple platforms support URLSessionWebSocketTask.
+#if canImport(Darwin) && !canImport(FoundationNetworking)
 
 import Foundation
 
-/// `Request` subclass which manages a WebSocket connection using `URLSessionWebSocketTask`.
-///
-/// - Note: This type is currently experimental. There will be breaking changes before the final public release,
-///         especially around adoption of the typed throws feature in Swift 6. Please report any missing features or
-///         bugs to https://github.com/Alamofire/Alamofire/issues.
 @available(macOS 10.15, iOS 13, tvOS 13, watchOS 6, *)
 @_spi(WebSocket) public final class WebSocketRequest: Request, @unchecked Sendable {
     enum IncomingEvent {
@@ -45,7 +17,6 @@ import Foundation
             case connected(protocol: String?)
             case receivedMessage(Success)
             case serializerFailed(Failure)
-            // Only received if the server disconnects or we cancel with code, not if we do a simple cancel or error.
             case disconnected(closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
             case completed(Completion)
         }
@@ -78,13 +49,9 @@ import Foundation
     }
 
     public struct Completion: Sendable {
-        /// Last `URLRequest` issued by the instance.
         public let request: URLRequest?
-        /// Last `HTTPURLResponse` received by the instance.
         public let response: HTTPURLResponse?
-        /// Last `URLSessionTaskMetrics` produced for the instance.
         public let metrics: URLSessionTaskMetrics?
-        /// `AFError` produced for the instance, if any.
         public let error: AFError?
     }
 
@@ -114,7 +81,6 @@ import Foundation
         }
     }
 
-    /// Response to a sent ping.
     public enum PingResponse: Sendable {
         public struct Pong: Sendable {
             let start: Date
@@ -122,11 +88,8 @@ import Foundation
             let latency: TimeInterval
         }
 
-        /// Received a pong with the associated state.
         case pong(Pong)
-        /// Received an error.
         case error(any Error)
-        /// Did not send the ping, the request is cancelled or suspended.
         case unsent
     }
 
@@ -188,10 +151,8 @@ import Foundation
         guard let webSocketTask = task as? URLSessionWebSocketTask else {
             fatalError("Invalid task of type \(task.self) created for WebSocketRequest.")
         }
-        // TODO: What about the any old tasks? Reset their receive?
         listen(to: webSocketTask)
 
-        // Empty pending messages.
         socketMutableState.write { state in
             guard !state.enqueuedSends.isEmpty else { return }
 
@@ -214,15 +175,11 @@ import Foundation
         dispatchPrecondition(condition: .onQueue(underlyingQueue))
 
         mutableState.write { mutableState in
-            // Check whether error is cancellation or other websocket closing error.
-            // If so, remove it.
-            // Otherwise keep it.
             if case let .sessionTaskFailed(error) = mutableState.error, (error as? URLError)?.code == .cancelled {
                 mutableState.error = nil
             }
         }
 
-        // TODO: Still issue this event?
         eventMonitor?.requestDidCancel(self)
     }
 
@@ -242,9 +199,7 @@ import Foundation
                 return
             }
 
-            // Resume to ensure metrics are gathered.
             task.resume()
-            // Cast from state directly, not the property, otherwise the lock is recursive.
             (mutableState.tasks.last as? URLSessionWebSocketTask)?.cancel(with: closeCode, reason: reason)
             underlyingQueue.async { self.didCancelTask(task) }
         }
@@ -263,9 +218,7 @@ import Foundation
         dispatchPrecondition(condition: .onQueue(underlyingQueue))
 
         socketMutableState.read { state in
-            // TODO: Capture HTTPURLResponse here too?
             for handler in state.handlers {
-                // Saved handler calls out to serializationQueue immediately, then to handler's queue.
                 handler.handler(.connected(protocol: `protocol`))
             }
         }
@@ -285,12 +238,10 @@ import Foundation
         let start = Date()
         let startTimestamp = ProcessInfo.processInfo.systemUptime
         socket?.sendPing { error in
-            // Calls back on delegate queue / rootQueue / underlyingQueue
             if let error {
                 queue.async {
                     onResponse(.error(error))
                 }
-                // TODO: What to do with failed ping? Configure for failure, auto retry, or stop pinging?
             } else {
                 let end = Date()
                 let endTimestamp = ProcessInfo.processInfo.systemUptime
@@ -306,7 +257,6 @@ import Foundation
     func startAutomaticPing(every pingInterval: TimeInterval) {
         socketMutableState.write { mutableState in
             guard isResumed else {
-                // Defer out of lock.
                 defer { cancelAutomaticPing() }
                 return
             }
@@ -345,28 +295,23 @@ import Foundation
         cancelAutomaticPing()
         socketMutableState.read { state in
             for handler in state.handlers {
-                // Saved handler calls out to serializationQueue immediately, then to handler's queue.
                 handler.handler(.disconnected(closeCode: closeCode, reason: reason))
             }
         }
     }
 
     private func listen(to task: URLSessionWebSocketTask) {
-        // TODO: Do we care about the cycle while receiving?
         task.receive { result in
             switch result {
             case let .success(message):
                 self.socketMutableState.read { state in
                     for handler in state.handlers {
-                        // Saved handler calls out to serializationQueue immediately, then to handler's queue.
                         handler.handler(.receivedMessage(message))
                     }
                 }
 
                 self.listen(to: task)
             case .failure:
-                // It doesn't seem like any relevant errors are received here, just incorrect garbage, like errors when
-                // the socket disconnects.
                 break
             }
         }
@@ -488,7 +433,6 @@ import Foundation
         guard !(isCancelled || isFinished) else { return }
 
         guard let socket else {
-            // URLSessionWebSocketTask not created yet, enqueue the send.
             socketMutableState.write { mutableState in
                 mutableState.enqueuedSends.append((message, queue, completionHandler))
             }

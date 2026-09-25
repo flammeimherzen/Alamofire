@@ -1,30 +1,6 @@
-//
-//  RequestTaskMap.swift
-//
-//  Copyright (c) 2014-2018 Alamofire Software Foundation (http://alamofire.org/)
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-//
 
 import Foundation
 
-/// A type that maintains a two way, one to one map of `URLSessionTask`s to `Request`s.
 struct RequestTaskMap {
     private typealias Events = (completed: Bool, metricsGathered: Bool)
 
@@ -131,7 +107,6 @@ struct RequestTaskMap {
 
         switch (events.completed, events.metricsGathered) {
         case (true, _): fatalError("RequestTaskMap consistency error: duplicate completionReceivedForTask call.")
-        // swift-corelibs-foundation doesn't gather metrics, so unconditionally remove the reference and return true.
         #if canImport(FoundationNetworking)
         default: self[task] = nil; return true
         #else
@@ -139,7 +114,6 @@ struct RequestTaskMap {
             if #available(macOS 10.12, iOS 10, watchOS 7, tvOS 10, *) {
                 taskEvents[task] = (completed: true, metricsGathered: false); return false
             } else {
-                // watchOS < 7 doesn't gather metrics, so unconditionally remove the reference and return true.
                 self[task] = nil; return true
             }
         case (false, true):

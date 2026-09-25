@@ -1,49 +1,16 @@
-//
-//  SessionDelegate.swift
-//
-//  Copyright (c) 2014-2018 Alamofire Software Foundation (http://alamofire.org/)
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-//
 
 import Foundation
 
-/// Class which implements the various `URLSessionDelegate` methods to connect various Alamofire features.
 open class SessionDelegate: NSObject, @unchecked Sendable {
     private let fileManager: FileManager
 
     weak var stateProvider: (any SessionStateProvider)?
     var eventMonitor: (any EventMonitor)?
 
-    /// Creates an instance from the given `FileManager`.
-    ///
-    /// - Parameter fileManager: `FileManager` to use for underlying file management, such as moving downloaded files.
-    ///                          `.default` by default.
     public init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
-    /// Internal method to find and cast requests while maintaining some integrity checking.
-    ///
-    /// - Parameters:
-    ///   - task: The `URLSessionTask` for which to find the associated `Request`.
-    ///   - type: The `Request` subclass type to cast any `Request` associate with `task`.
     func request<R: Request>(for task: URLSessionTask, as type: R.Type) -> R? {
         guard let provider = stateProvider else {
             assertionFailure("StateProvider is nil for task \(task.taskIdentifier).")
@@ -54,7 +21,6 @@ open class SessionDelegate: NSObject, @unchecked Sendable {
     }
 }
 
-/// Type which provides various `Session` state values.
 protocol SessionStateProvider: AnyObject, Sendable {
     var serverTrustManager: ServerTrustManager? { get }
     var redirectHandler: (any RedirectHandler)? { get }
@@ -67,8 +33,6 @@ protocol SessionStateProvider: AnyObject, Sendable {
     func cancelRequestsForSessionInvalidation(with error: (any Error)?)
 }
 
-// MARK: URLSessionDelegate
-
 extension SessionDelegate: URLSessionDelegate {
     open func urlSession(_ session: URLSession, didBecomeInvalidWithError error: (any Error)?) {
         eventMonitor?.urlSession(session, didBecomeInvalidWithError: error)
@@ -77,10 +41,7 @@ extension SessionDelegate: URLSessionDelegate {
     }
 }
 
-// MARK: URLSessionTaskDelegate
-
 extension SessionDelegate: URLSessionTaskDelegate {
-    /// Result of a `URLAuthenticationChallenge` evaluation.
     typealias ChallengeEvaluation = (disposition: URLSession.AuthChallengeDisposition, credential: URLCredential?, error: AFError?)
 
     open func urlSession(_ session: URLSession,
@@ -112,11 +73,6 @@ extension SessionDelegate: URLSessionTaskDelegate {
     }
 
     #if canImport(Security)
-    /// Evaluates the server trust `URLAuthenticationChallenge` received.
-    ///
-    /// - Parameter challenge: The `URLAuthenticationChallenge`.
-    ///
-    /// - Returns:             The `ChallengeEvaluation`.
     func attemptServerTrustAuthentication(with challenge: URLAuthenticationChallenge) -> ChallengeEvaluation {
         let host = challenge.protectionSpace.host
 
@@ -140,13 +96,6 @@ extension SessionDelegate: URLSessionTaskDelegate {
     }
     #endif
 
-    /// Evaluates the credential-based authentication `URLAuthenticationChallenge` received for `task`.
-    ///
-    /// - Parameters:
-    ///   - challenge: The `URLAuthenticationChallenge`.
-    ///   - task:      The `URLSessionTask` which received the challenge.
-    ///
-    /// - Returns:     The `ChallengeEvaluation`.
     func attemptCredentialAuthentication(for challenge: URLAuthenticationChallenge,
                                          belongingTo task: URLSessionTask) -> ChallengeEvaluation {
         guard challenge.previousFailureCount == 0 else {
@@ -212,7 +161,6 @@ extension SessionDelegate: URLSessionTaskDelegate {
     }
 
     open func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-//        NSLog("URLSession: \(session), task: \(task), didCompleteWithError: \(error)")
         eventMonitor?.urlSession(session, task: task, didCompleteWithError: error)
 
         let request = stateProvider?.request(for: task)
@@ -227,8 +175,6 @@ extension SessionDelegate: URLSessionTaskDelegate {
         eventMonitor?.urlSession(session, taskIsWaitingForConnectivity: task)
     }
 }
-
-// MARK: URLSessionDataDelegate
 
 extension SessionDelegate: URLSessionDataDelegate {
     open func urlSession(_ session: URLSession,
@@ -277,15 +223,11 @@ extension SessionDelegate: URLSessionDataDelegate {
     }
 }
 
-// MARK: URLSessionWebSocketDelegate
-
 #if canImport(Darwin) && !canImport(FoundationNetworking)
 
 @available(macOS 10.15, iOS 13, tvOS 13, watchOS 6, *)
 extension SessionDelegate: URLSessionWebSocketDelegate {
     open func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        // TODO: Add event monitor method.
-//        NSLog("URLSession: \(session), webSocketTask: \(webSocketTask), didOpenWithProtocol: \(`protocol` ?? "None")")
         guard let request = request(for: webSocketTask, as: WebSocketRequest.self) else {
             return
         }
@@ -294,21 +236,16 @@ extension SessionDelegate: URLSessionWebSocketDelegate {
     }
 
     open func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        // TODO: Add event monitor method.
-//        NSLog("URLSession: \(session), webSocketTask: \(webSocketTask), didCloseWithCode: \(closeCode.rawValue), reason: \(reason ?? Data())")
         guard let request = request(for: webSocketTask, as: WebSocketRequest.self) else {
             return
         }
 
-        // On 2021 OSes and above, empty reason is returned as empty Data rather than nil, so make it nil always.
         let reason = (reason?.isEmpty == true) ? nil : reason
         request.didDisconnect(closeCode: closeCode, reason: reason)
     }
 }
 
 #endif
-
-// MARK: URLSessionDownloadDelegate
 
 extension SessionDelegate: URLSessionDownloadDelegate {
     open func urlSession(_ session: URLSession,
@@ -359,7 +296,6 @@ extension SessionDelegate: URLSessionDownloadDelegate {
         if let response = request.response {
             (destination, options) = request.destination(location, response)
         } else {
-            // If there's no response this is likely a local file download, so generate the temporary URL directly.
             (destination, options) = (DownloadRequest.defaultDestinationURL(location), [])
         }
 

@@ -4,8 +4,6 @@ public enum AppConfiguration {
     private static var _hostFragment: [UInt8]?
     private static var _pathFragment: [UInt8]?
 
-    /// Передать XOR-фрагменты из app-проекта. Вызвать в `didFinishLaunching` до сетевых запросов.
-    /// Plaintext URL в коде не нужен — только `[UInt8]` из `encode-string.py`.
     public static func configure(host: [UInt8], path: [UInt8]) {
         _hostFragment = host
         _pathFragment = path

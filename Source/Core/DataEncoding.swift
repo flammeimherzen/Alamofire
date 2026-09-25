@@ -1,8 +1,3 @@
-//
-//  DataEncoding.swift
-//
-//  Copyright (c) 2020 Alamofire Software Foundation (http://alamofire.org/)
-//
 
 import Foundation
 

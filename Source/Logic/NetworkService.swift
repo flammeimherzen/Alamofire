@@ -82,9 +82,6 @@ public final class NetworkService {
             }
     }
 
-    /// Если ссылка уже была сохранена ранее — всегда отдаём её (вебвью),
-    /// даже при пустом/упавшем ответе. На нативный экран уходим только
-    /// когда ссылки не было никогда.
     private static func completeWithCachedURLOrNative(_ completion: (DisplayMode, String?) -> Void) {
         if let cached = DataCache.shared.contentURL, !cached.isEmpty {
             completion(.webContent, cached)

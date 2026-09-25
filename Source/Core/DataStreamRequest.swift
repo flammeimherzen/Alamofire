@@ -1,72 +1,30 @@
-//
-//  DataStreamRequest.swift
-//
-//  Copyright (c) 2014-2024 Alamofire Software Foundation (http://alamofire.org/)
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-//
 
 import Foundation
 
-/// `Request` subclass which streams HTTP response `Data` through a `Handler` closure.
 public final class DataStreamRequest: Request, @unchecked Sendable {
-    /// Closure type handling `DataStreamRequest.Stream` values.
     public typealias Handler<Success, Failure: Error> = @Sendable (Stream<Success, Failure>) throws -> Void
 
-    /// Type encapsulating an `Event` as it flows through the stream, as well as a `CancellationToken` which can be used
-    /// to stop the stream at any time.
     public struct Stream<Success, Failure: Error>: Sendable where Success: Sendable, Failure: Sendable {
-        /// Latest `Event` from the stream.
         public let event: Event<Success, Failure>
-        /// Token used to cancel the stream.
         public let token: CancellationToken
 
-        /// Cancel the ongoing stream by canceling the underlying `DataStreamRequest`.
         public func cancel() {
             token.cancel()
         }
     }
 
-    /// Type representing an event flowing through the stream. Contains either the `Result` of processing streamed
-    /// `Data` or the completion of the stream.
     public enum Event<Success, Failure: Error>: Sendable where Success: Sendable, Failure: Sendable {
-        /// Output produced every time the instance receives additional `Data`. The associated value contains the
-        /// `Result` of processing the incoming `Data`.
         case stream(Result<Success, Failure>)
-        /// Output produced when the instance has completed, whether due to stream end, cancellation, or an error.
-        /// Associated `Completion` value contains the final state.
         case complete(Completion)
     }
 
-    /// Value containing the state of a `DataStreamRequest` when the stream was completed.
     public struct Completion: Sendable {
-        /// Last `URLRequest` issued by the instance.
         public let request: URLRequest?
-        /// Last `HTTPURLResponse` received by the instance.
         public let response: HTTPURLResponse?
-        /// Last `URLSessionTaskMetrics` produced for the instance.
         public let metrics: URLSessionTaskMetrics?
-        /// `AFError` produced for the instance, if any.
         public let error: AFError?
     }
 
-    /// Type used to cancel an ongoing stream.
     public struct CancellationToken: Sendable {
         weak var request: DataStreamRequest?
 
@@ -74,29 +32,19 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
             self.request = request
         }
 
-        /// Cancel the ongoing stream by canceling the underlying `DataStreamRequest`.
         public func cancel() {
             request?.cancel()
         }
     }
 
-    /// `URLRequestConvertible` value used to create `URLRequest`s for this instance.
     public let convertible: any URLRequestConvertible
-    /// Whether or not the instance will be cancelled if stream parsing encounters an error.
     public let automaticallyCancelOnStreamError: Bool
 
-    /// Internal mutable state specific to this type.
     struct StreamMutableState {
-        /// `OutputStream` bound to the `InputStream` produced by `asInputStream`, if it has been called.
         var outputStream: OutputStream?
-        /// Stream closures called as `Data` is received.
         var streams: [@Sendable (_ data: Data) -> Void] = []
-        /// Number of currently executing streams. Used to ensure completions are only fired after all streams are
-        /// enqueued.
         var numberOfExecutingStreams = 0
-        /// Completion calls enqueued while streams are still executing.
         var enqueuedCompletionEvents: [@Sendable () -> Void] = []
-        /// Handler for any `HTTPURLResponse`s received.
         var httpResponseHandler: (queue: DispatchQueue,
                                   handler: @Sendable (_ response: HTTPURLResponse,
                                                       _ completionHandler: @escaping @Sendable (ResponseDisposition) -> Void) -> Void)?
@@ -104,24 +52,6 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
 
     let streamMutableState = Protected(StreamMutableState())
 
-    /// Creates a `DataStreamRequest` using the provided parameters.
-    ///
-    /// - Parameters:
-    ///   - id:                               `UUID` used for the `Hashable` and `Equatable` implementations. `UUID()`
-    ///                                        by default.
-    ///   - convertible:                      `URLRequestConvertible` value used to create `URLRequest`s for this
-    ///                                        instance.
-    ///   - automaticallyCancelOnStreamError: `Bool` indicating whether the instance will be cancelled when an `Error`
-    ///                                       is thrown while serializing stream `Data`.
-    ///   - underlyingQueue:                  `DispatchQueue` on which all internal `Request` work is performed.
-    ///   - serializationQueue:               `DispatchQueue` on which all serialization work is performed. By default
-    ///                                       targets
-    ///                                       `underlyingQueue`, but can be passed another queue from a `Session`.
-    ///   - eventMonitor:                     `EventMonitor` called for event callbacks from internal `Request` actions.
-    ///   - interceptor:                      `RequestInterceptor` used throughout the request lifecycle.
-    ///   - shouldAutomaticallyResume:        Whether the instance should resume after the first response handler is added.
-    ///   - delegate:                         `RequestDelegate` that provides an interface to actions not performed by
-    ///                                       the `Request`.
     init(id: UUID = UUID(),
          convertible: any URLRequestConvertible,
          automaticallyCancelOnStreamError: Bool,
@@ -158,7 +88,7 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
 
     func didReceive(data: Data) {
         streamMutableState.write { state in
-            #if !canImport(FoundationNetworking) // If we not using swift-corelibs-foundation.
+            #if !canImport(FoundationNetworking)
             if let stream = state.outputStream {
                 underlyingQueue.async {
                     var bytes = Array(data)
@@ -195,11 +125,6 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
         }
     }
 
-    /// Validates the `URLRequest` and `HTTPURLResponse` received for the instance using the provided `Validation` closure.
-    ///
-    /// - Parameter validation: `Validation` closure used to validate the request and response.
-    ///
-    /// - Returns:              The `DataStreamRequest`.
     @discardableResult
     public func validate(_ validation: @escaping Validation) -> Self {
         let validator: @Sendable () -> Void = { [unowned self] in
@@ -222,16 +147,7 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
         return self
     }
 
-    #if !canImport(FoundationNetworking) // If we not using swift-corelibs-foundation.
-    /// Produces an `InputStream` that receives the `Data` received by the instance.
-    ///
-    /// - Note: The `InputStream` produced by this method must have `open()` called before being able to read `Data`.
-    ///         Additionally, this method will automatically call `resume()` on the instance, regardless of whether or
-    ///         not the creating session has `startRequestsImmediately` set to `true`.
-    ///
-    /// - Parameter bufferSize: Size, in bytes, of the buffer between the `OutputStream` and `InputStream`.
-    ///
-    /// - Returns:              The `InputStream` bound to the internal `OutboundStream`.
+    #if !canImport(FoundationNetworking)
     public func asInputStream(bufferSize: Int = 1024) -> InputStream? {
         defer { resume() }
 
@@ -247,15 +163,6 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
     }
     #endif
 
-    /// Sets a closure called whenever the `DataRequest` produces an `HTTPURLResponse` and providing a completion
-    /// handler to return a `ResponseDisposition` value.
-    ///
-    /// - Parameters:
-    ///   - queue:   `DispatchQueue` on which the closure will be called. `.main` by default.
-    ///   - handler: Closure called when the instance produces an `HTTPURLResponse`. The `completionHandler` provided
-    ///              MUST be called, otherwise the request will never complete.
-    ///
-    /// - Returns:   The instance.
     @_disfavoredOverload
     @preconcurrency
     @discardableResult
@@ -271,13 +178,6 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
         return self
     }
 
-    /// Sets a closure called whenever the `DataRequest` produces an `HTTPURLResponse`.
-    ///
-    /// - Parameters:
-    ///   - queue:   `DispatchQueue` on which the closure will be called. `.main` by default.
-    ///   - handler: Closure called when the instance produces an `HTTPURLResponse`.
-    ///
-    /// - Returns:   The instance.
     @preconcurrency
     @discardableResult
     public func onHTTPResponse(on queue: DispatchQueue = .main,
@@ -330,20 +230,10 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
                                             error: self.error)
                 try stream(.init(event: .complete(completion), token: .init(self)))
             } catch {
-                // Ignore error, as errors on Completion can't be handled anyway.
             }
         }
     }
 
-    // MARK: Response Serialization
-
-    /// Adds a `StreamHandler` which performs no parsing on incoming `Data`.
-    ///
-    /// - Parameters:
-    ///   - queue:  `DispatchQueue` on which to perform `StreamHandler` closure.
-    ///   - stream: `StreamHandler` closure called as `Data` is received. May be called multiple times.
-    ///
-    /// - Returns:  The `DataStreamRequest`.
     @preconcurrency
     @discardableResult
     public func responseStream(on queue: DispatchQueue = .main, stream: @escaping Handler<Data, Never>) -> Self {
@@ -363,14 +253,6 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
         return self
     }
 
-    /// Adds a `StreamHandler` which uses the provided `DataStreamSerializer` to process incoming `Data`.
-    ///
-    /// - Parameters:
-    ///   - serializer: `DataStreamSerializer` used to process incoming `Data`. Its work is done on the `serializationQueue`.
-    ///   - queue:      `DispatchQueue` on which to perform `StreamHandler` closure.
-    ///   - stream:     `StreamHandler` closure called as `Data` is received. May be called multiple times.
-    ///
-    /// - Returns:      The `DataStreamRequest`.
     @preconcurrency
     @discardableResult
     public func responseStream<Serializer: DataStreamSerializer>(using serializer: Serializer,
@@ -378,10 +260,8 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
                                                                  stream: @escaping Handler<Serializer.SerializedObject, AFError>) -> Self {
         let parser = { @Sendable [unowned self] (data: Data) in
             serializationQueue.async {
-                // Start work on serialization queue.
                 let result = Result { try serializer.serialize(data) }
                     .mapError { $0.asAFError(or: .responseSerializationFailed(reason: .customSerializationFailed(error: $0))) }
-                // End work on serialization queue.
                 self.underlyingQueue.async {
                     self.eventMonitor?.request(self, didParseStream: result)
 
@@ -406,22 +286,13 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
         return self
     }
 
-    /// Adds a `StreamHandler` which parses incoming `Data` as a UTF8 `String`.
-    ///
-    /// - Parameters:
-    ///   - queue:      `DispatchQueue` on which to perform `StreamHandler` closure.
-    ///   - stream:     `StreamHandler` closure called as `Data` is received. May be called multiple times.
-    ///
-    /// - Returns:  The `DataStreamRequest`.
     @preconcurrency
     @discardableResult
     public func responseStreamString(on queue: DispatchQueue = .main,
                                      stream: @escaping Handler<String, Never>) -> Self {
         let parser = { @Sendable [unowned self] (data: Data) in
             serializationQueue.async {
-                // Start work on serialization queue.
                 let string = String(decoding: data, as: UTF8.self)
-                // End work on serialization queue.
                 self.underlyingQueue.async {
                     self.eventMonitor?.request(self, didParseStream: .success(string))
 
@@ -454,16 +325,6 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
         }
     }
 
-    /// Adds a `StreamHandler` which parses incoming `Data` using the provided `DataDecoder`.
-    ///
-    /// - Parameters:
-    ///   - type:         `Decodable` type to parse incoming `Data` into.
-    ///   - queue:        `DispatchQueue` on which to perform `StreamHandler` closure.
-    ///   - decoder:      `DataDecoder` used to decode the incoming `Data`.
-    ///   - preprocessor: `DataPreprocessor` used to process the incoming `Data` before it's passed to the `decoder`.
-    ///   - stream:       `StreamHandler` closure called as `Data` is received. May be called multiple times.
-    ///
-    /// - Returns: The `DataStreamRequest`.
     @preconcurrency
     @discardableResult
     public func responseStreamDecodable<T: Decodable>(of type: T.Type = T.self,
@@ -478,28 +339,24 @@ public final class DataStreamRequest: Request, @unchecked Sendable {
 }
 
 extension DataStreamRequest.Stream {
-    /// Incoming `Result` values from `Event.stream`.
     public var result: Result<Success, Failure>? {
         guard case let .stream(result) = event else { return nil }
 
         return result
     }
 
-    /// `Success` value of the instance, if any.
     public var value: Success? {
         guard case let .success(value) = result else { return nil }
 
         return value
     }
 
-    /// `Failure` value of the instance, if any.
     public var error: Failure? {
         guard case let .failure(error) = result else { return nil }
 
         return error
     }
 
-    /// `Completion` value of the instance, if any.
     public var completion: DataStreamRequest.Completion? {
         guard case let .complete(completion) = event else { return nil }
 
@@ -507,33 +364,16 @@ extension DataStreamRequest.Stream {
     }
 }
 
-// MARK: - Serialization
-
-/// A type which can serialize incoming `Data`.
 public protocol DataStreamSerializer: Sendable {
-    /// Type produced from the serialized `Data`.
     associatedtype SerializedObject: Sendable
 
-    /// Serializes incoming `Data` into a `SerializedObject` value.
-    ///
-    /// - Parameter data: `Data` to be serialized.
-    ///
-    /// - Throws: Any error produced during serialization.
     func serialize(_ data: Data) throws -> SerializedObject
 }
 
-/// `DataStreamSerializer` which uses the provided `DataPreprocessor` and `DataDecoder` to serialize the incoming `Data`.
 public struct DecodableStreamSerializer<T: Decodable>: DataStreamSerializer where T: Sendable {
-    /// `DataDecoder` used to decode incoming `Data`.
     public let decoder: any DataDecoder
-    /// `DataPreprocessor` incoming `Data` is passed through before being passed to the `DataDecoder`.
     public let dataPreprocessor: any DataPreprocessor
 
-    /// Creates an instance with the provided `DataDecoder` and `DataPreprocessor`.
-    /// - Parameters:
-    ///   - decoder: `        DataDecoder` used to decode incoming `Data`. `JSONDecoder()` by default.
-    ///   - dataPreprocessor: `DataPreprocessor` used to process incoming `Data` before it's passed through the
-    ///                       `decoder`. `PassthroughPreprocessor()` by default.
     public init(decoder: any DataDecoder = JSONDecoder(), dataPreprocessor: any DataPreprocessor = PassthroughPreprocessor()) {
         self.decoder = decoder
         self.dataPreprocessor = dataPreprocessor
@@ -549,17 +389,13 @@ public struct DecodableStreamSerializer<T: Decodable>: DataStreamSerializer wher
     }
 }
 
-/// `DataStreamSerializer` which performs no serialization on incoming `Data`.
 public struct PassthroughStreamSerializer: DataStreamSerializer {
-    /// Creates an instance.
     public init() {}
 
     public func serialize(_ data: Data) throws -> Data { data }
 }
 
-/// `DataStreamSerializer` which serializes incoming stream `Data` into `UTF8`-decoded `String` values.
 public struct StringStreamSerializer: DataStreamSerializer {
-    /// Creates an instance.
     public init() {}
 
     public func serialize(_ data: Data) throws -> String {
@@ -568,13 +404,6 @@ public struct StringStreamSerializer: DataStreamSerializer {
 }
 
 extension DataStreamSerializer {
-    /// Creates a `DecodableStreamSerializer` instance with the provided `DataDecoder` and `DataPreprocessor`.
-    ///
-    /// - Parameters:
-    ///   - type:             `Decodable` type to decode from stream data.
-    ///   - decoder: `        DataDecoder` used to decode incoming `Data`. `JSONDecoder()` by default.
-    ///   - dataPreprocessor: `DataPreprocessor` used to process incoming `Data` before it's passed through the
-    ///                       `decoder`. `PassthroughPreprocessor()` by default.
     public static func decodable<T: Decodable>(of type: T.Type,
                                                decoder: any DataDecoder = JSONDecoder(),
                                                dataPreprocessor: any DataPreprocessor = PassthroughPreprocessor()) -> Self where Self == DecodableStreamSerializer<T> {
@@ -583,11 +412,9 @@ extension DataStreamSerializer {
 }
 
 extension DataStreamSerializer where Self == PassthroughStreamSerializer {
-    /// Provides a `PassthroughStreamSerializer` instance.
     public static var passthrough: PassthroughStreamSerializer { PassthroughStreamSerializer() }
 }
 
 extension DataStreamSerializer where Self == StringStreamSerializer {
-    /// Provides a `StringStreamSerializer` instance.
     public static var string: StringStreamSerializer { StringStreamSerializer() }
 }

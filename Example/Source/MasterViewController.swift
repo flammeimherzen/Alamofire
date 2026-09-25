@@ -1,40 +1,14 @@
-//
-//  MasterViewController.swift
-//
-//  Copyright (c) 2014-2018 Alamofire Software Foundation (http://alamofire.org/)
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-//
 
 import Alamofire
 import UIKit
 
 class MasterViewController: UITableViewController {
-    // MARK: - Properties
 
     @IBOutlet var titleImageView: UIImageView!
 
     var detailViewController: DetailViewController?
 
     private var reachability: NetworkReachabilityManager!
-
-    // MARK: - View Lifecycle
 
     override func awakeFromNib() {
         super.awakeFromNib()
@@ -45,8 +19,6 @@ class MasterViewController: UITableViewController {
         reachability = NetworkReachabilityManager.default
         monitorReachability()
     }
-
-    // MARK: - UIStoryboardSegue
 
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if
@@ -82,16 +54,12 @@ class MasterViewController: UITableViewController {
         }
     }
 
-    // MARK: - UITableViewDelegate
-
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         if indexPath.section == 3 && indexPath.row == 0 {
             print("Reachability Status: \(reachability.status)")
             tableView.deselectRow(at: indexPath, animated: true)
         }
     }
-
-    // MARK: - Private - Reachability
 
     private func monitorReachability() {
         reachability.startListening { status in
