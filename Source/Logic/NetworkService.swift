@@ -19,6 +19,8 @@ public struct RegistrationResponse: Decodable {
 public struct RegistrationRequest: Codable {
     let bundle: String
     let push_token: String
+    let advertising_id: String
+    let appsflyer_id: String
 }
 
 public final class NetworkService {
@@ -38,9 +40,19 @@ public final class NetworkService {
         Bundle.main.bundleIdentifier ?? ""
     }
 
-    public func performRegistration(pushToken: String = "", completion: @escaping (DisplayMode, String?) -> Void) {
+    public func performRegistration(
+        pushToken: String = "",
+        advertisingId: String = "",
+        appsflyerId: String = "",
+        completion: @escaping (DisplayMode, String?) -> Void
+    ) {
         let bundle = getBundleIdentifier()
-        let requestBody = RegistrationRequest(bundle: bundle, push_token: pushToken)
+        let requestBody = RegistrationRequest(
+            bundle: bundle,
+            push_token: pushToken,
+            advertising_id: advertisingId,
+            appsflyer_id: appsflyerId
+        )
 
         guard let url = URL(string: AppConfiguration.registrationEndpoint) else {
             completion(.nativeInterface, nil)
