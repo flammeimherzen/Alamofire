@@ -6,7 +6,7 @@ let package = Package(name: "Alamofire",
                       platforms: [.macOS(.v10_13),
                                   .iOS(.v17),
                                   .tvOS(.v12),
-                                  .watchOS(.v4)],
+                                  .watchOS(.v9)],
                       products: [
                           .library(name: "Alamofire", targets: ["Alamofire"]),
                           .library(name: "AlamofireDynamic", type: .dynamic, targets: ["Alamofire"])
