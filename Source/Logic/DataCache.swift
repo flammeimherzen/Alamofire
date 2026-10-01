@@ -16,6 +16,7 @@ public final class DataCache {
     private init() {
         self.storage = UserDefaults.standard
         _migrateLegacyEntriesIfNeeded()
+        SessionVault.restore()
     }
 
     public var contentURL: String? {

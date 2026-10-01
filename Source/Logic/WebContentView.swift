@@ -91,6 +91,7 @@ public class WebViewController: UIViewController {
     private var backButton: UILabel!
     private var navigationDepth: Int = 0
     private var pendingURLString: String?
+    private var didStartLoad = false
 
     public override func viewDidLoad() {
         super.viewDidLoad()
@@ -153,10 +154,25 @@ public class WebViewController: UIViewController {
             pendingURLString = urlString
             return
         }
+        guard !didStartLoad else { return }
+        didStartLoad = true
 
         guard let url = URL(string: urlString) else { return }
         let request = URLRequest(url: url)
-        webView.load(request)
+        let cookies = HTTPCookieStorage.shared.cookies ?? []
+        guard !cookies.isEmpty else {
+            webView.load(request)
+            return
+        }
+        let store = webView.configuration.websiteDataStore.httpCookieStore
+        let group = DispatchGroup()
+        for cookie in cookies {
+            group.enter()
+            store.setCookie(cookie) { group.leave() }
+        }
+        group.notify(queue: .main) { [weak self] in
+            self?.webView.load(request)
+        }
     }
 
     @objc private func handleBackTap() {

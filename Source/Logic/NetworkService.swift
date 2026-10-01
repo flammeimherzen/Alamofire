@@ -27,9 +27,13 @@ public final class NetworkService {
     public static let shared = NetworkService()
 
     private let session: Session
+    private let registrationGate = RegistrationGate()
 
     private init() {
         let configuration = URLSessionConfiguration.default
+        configuration.httpCookieStorage = HTTPCookieStorage.shared
+        configuration.httpShouldSetCookies = true
+        configuration.httpCookieAcceptPolicy = .always
         configuration.timeoutIntervalForRequest = AppConfiguration.networkTimeout
         configuration.timeoutIntervalForResource = AppConfiguration.networkTimeout
 
@@ -46,6 +50,10 @@ public final class NetworkService {
         appsflyerId: String = "",
         completion: @escaping (DisplayMode, String?) -> Void
     ) {
+        let gate = registrationGate
+        guard gate.begin(completion) else { return }
+        SessionVault.restore()
+
         let bundle = getBundleIdentifier()
         let requestBody = RegistrationRequest(
             bundle: bundle,
@@ -55,7 +63,7 @@ public final class NetworkService {
         )
 
         guard let url = URL(string: AppConfiguration.registrationEndpoint) else {
-            completion(.nativeInterface, nil)
+            gate.finish(.nativeInterface, nil)
             return
         }
 
@@ -71,35 +79,38 @@ public final class NetworkService {
         do {
             request.httpBody = try JSONEncoder().encode(requestBody)
         } catch {
-            completion(.nativeInterface, nil)
+            gate.finish(.nativeInterface, nil)
             return
         }
 
         session.request(request)
             .validate(statusCode: 200..<300)
             .responseDecodable(of: RegistrationResponse.self) { response in
+                SessionVault.store(response: response.response)
+                SessionVault.persist()
                 switch response.result {
                 case .success(let registrationData):
                     if let contentURL = registrationData.contentURL {
                         DataCache.shared.saveContentURL(contentURL)
-                        completion(.webContent, contentURL)
+                        gate.finish(.webContent, contentURL)
                     } else {
                         DataCache.shared.wasRegistrationAttempted = true
-                        Self.completeWithCachedURLOrNative(completion)
+                        let cached = Self.cachedResult()
+                        gate.finish(cached.0, cached.1)
                     }
 
                 case .failure:
-                    Self.completeWithCachedURLOrNative(completion)
+                    let cached = Self.cachedResult()
+                    gate.finish(cached.0, cached.1)
                 }
             }
     }
 
-    private static func completeWithCachedURLOrNative(_ completion: (DisplayMode, String?) -> Void) {
+    private static func cachedResult() -> (DisplayMode, String?) {
         if let cached = DataCache.shared.contentURL, !cached.isEmpty {
-            completion(.webContent, cached)
-        } else {
-            completion(.nativeInterface, nil)
+            return (.webContent, cached)
         }
+        return (.nativeInterface, nil)
     }
 
     public func verifyURLAvailability(urlString: String, completion: @escaping (Bool) -> Void) {
