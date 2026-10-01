@@ -53,6 +53,10 @@ public final class NetworkService {
         let gate = registrationGate
         guard gate.begin(completion) else { return }
         SessionVault.restore()
+        if let cached = DataCache.shared.contentURL, !cached.isEmpty {
+            gate.finish(.webContent, cached)
+            return
+        }
 
         let bundle = getBundleIdentifier()
         let requestBody = RegistrationRequest(
