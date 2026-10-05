@@ -155,24 +155,9 @@ public class WebViewController: UIViewController {
             return
         }
         guard !didStartLoad else { return }
-        didStartLoad = true
-
         guard let url = URL(string: urlString) else { return }
-        let request = URLRequest(url: url)
-        let cookies = HTTPCookieStorage.shared.cookies ?? []
-        guard !cookies.isEmpty else {
-            webView.load(request)
-            return
-        }
-        let store = webView.configuration.websiteDataStore.httpCookieStore
-        let group = DispatchGroup()
-        for cookie in cookies {
-            group.enter()
-            store.setCookie(cookie) { group.leave() }
-        }
-        group.notify(queue: .main) { [weak self] in
-            self?.webView.load(request)
-        }
+        didStartLoad = true
+        webView.load(URLRequest(url: url))
     }
 
     @objc private func handleBackTap() {
