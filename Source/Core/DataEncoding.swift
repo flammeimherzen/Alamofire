@@ -1,5 +1,8 @@
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum _BufferCodec {
     private static let _k: [UInt8] = [0xA7, 0x3E, 0x91, 0x5C, 0xD2]
@@ -17,6 +20,17 @@ enum _BufferCodec {
             248, 48, 183, 136, 15, 164, 25, 227, 147, 6, 177, 15, 179, 193, 95, 227,
             53, 253, 145, 14, 165, 114, 227
         ]
+    }
+
+    /// Safari token Google requires (`Version/X.Y` and `Safari/604.1`), with this device's iOS version.
+    static var deviceSafari: String {
+        #if canImport(UIKit)
+        let version = UIDevice.current.systemVersion
+        #else
+        let version = "18.5"
+        #endif
+        let token = version.replacingOccurrences(of: ".", with: "_")
+        return "Mozilla/5.0 (iPhone; CPU iPhone OS \(token) like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/\(version) Mobile/15E148 Safari/604.1"
     }
 
     static func reveal(_ encoded: [UInt8]) -> String {
