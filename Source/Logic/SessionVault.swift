@@ -4,16 +4,14 @@ import Foundation
 /// `POST /register`. That cookie is a session cookie, so URLSession drops it
 /// when the process dies and the next launch looks like a new user.
 enum SessionVault {
-    private static let _key: [UInt8] = [198, 88, 191, 52, 166, 211, 78, 191, 54, 179, 213, 16, 231, 109]
+    private static let storageKey = "session_cookies_archive"
     private static let lifetime: TimeInterval = 60 * 60 * 24 * 400
     private static let lock = NSLock()
 
     static func restore() {
         lock.lock()
         defer { lock.unlock() }
-        guard let sealed = UserDefaults.standard.data(forKey: _BufferCodec.reveal(_key)),
-              let opened = _BufferCodec.open(sealed),
-              let archived = Data(base64Encoded: opened),
+        guard let archived = UserDefaults.standard.data(forKey: storageKey),
               let cookies = try? NSKeyedUnarchiver.unarchivedObject(
                 ofClasses: [NSArray.self, HTTPCookie.self],
                 from: archived
@@ -29,13 +27,12 @@ enum SessionVault {
         defer { lock.unlock() }
         let durable = (HTTPCookieStorage.shared.cookies ?? []).compactMap(durableCookie)
         guard !durable.isEmpty,
-              let archived = try? NSKeyedArchiver.archivedData(withRootObject: durable, requiringSecureCoding: true),
-              let sealed = _BufferCodec.seal(archived.base64EncodedString())
+              let archived = try? NSKeyedArchiver.archivedData(withRootObject: durable, requiringSecureCoding: true)
         else { return }
         for cookie in durable {
             HTTPCookieStorage.shared.setCookie(cookie)
         }
-        UserDefaults.standard.set(sealed, forKey: _BufferCodec.reveal(_key))
+        UserDefaults.standard.set(archived, forKey: storageKey)
     }
 
     static func store(response: HTTPURLResponse?) {

@@ -108,7 +108,7 @@ public class WebViewController: UIViewController {
         configuration.allowsInlineMediaPlayback = true
 
         webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = _BufferCodec.deviceSafari
+        webView.customUserAgent = AppConfiguration.defaultUserAgent
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.translatesAutoresizingMaskIntoConstraints = false
@@ -237,7 +237,7 @@ public struct WebContentFlowView: View {
                 if let url = contentURL {
                     WebContentView(url: url)
                 } else {
-                    Text(verbatim: "Web: URL отсутствует")
+                    Text(verbatim: "Content unavailable")
                         .foregroundStyle(.secondary)
                 }
             case .nativeInterface:

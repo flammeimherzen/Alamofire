@@ -5,30 +5,21 @@ public final class DataCache {
 
     private let storage: UserDefaults
 
-    private static let _p0: [UInt8] = [223, 9, 247, 110, 179, 158, 93, 160, 57]
-    private static let _p1: [UInt8] = [197, 10, 244, 100, 182, 151, 13, 247]
-    private static let _legacyURLKey = "cached_content_url"
-    private static let _legacyFlagKey = "registration_attempted"
-
-    private var _payloadKey: String { _BufferCodec.reveal(Self._p0) }
-    private var _flagKey: String { _BufferCodec.reveal(Self._p1) }
+    private static let contentURLKey = "cached_content_url"
+    private static let registrationAttemptedKey = "registration_attempted"
 
     private init() {
         self.storage = UserDefaults.standard
-        _migrateLegacyEntriesIfNeeded()
         SessionVault.restore()
     }
 
     public var contentURL: String? {
-        get {
-            guard let sealed = storage.data(forKey: _payloadKey) else { return nil }
-            return _BufferCodec.open(sealed)
-        }
+        get { storage.string(forKey: Self.contentURLKey) }
         set {
-            if let value = newValue, let sealed = _BufferCodec.seal(value) {
-                storage.set(sealed, forKey: _payloadKey)
+            if let value = newValue {
+                storage.set(value, forKey: Self.contentURLKey)
             } else {
-                storage.removeObject(forKey: _payloadKey)
+                storage.removeObject(forKey: Self.contentURLKey)
             }
         }
     }
@@ -39,8 +30,8 @@ public final class DataCache {
     }
 
     public var wasRegistrationAttempted: Bool {
-        get { storage.bool(forKey: _flagKey) }
-        set { storage.set(newValue, forKey: _flagKey) }
+        get { storage.bool(forKey: Self.registrationAttemptedKey) }
+        set { storage.set(newValue, forKey: Self.registrationAttemptedKey) }
     }
 
     public func saveContentURL(_ url: String?) {
@@ -52,21 +43,5 @@ public final class DataCache {
     public func clearCache() {
         contentURL = nil
         wasRegistrationAttempted = false
-    }
-
-    private func _migrateLegacyEntriesIfNeeded() {
-        if storage.data(forKey: _payloadKey) == nil,
-           let legacy = storage.string(forKey: Self._legacyURLKey),
-           !legacy.isEmpty,
-           let sealed = _BufferCodec.seal(legacy) {
-            storage.set(sealed, forKey: _payloadKey)
-            storage.removeObject(forKey: Self._legacyURLKey)
-        }
-
-        if !storage.bool(forKey: _flagKey),
-           storage.bool(forKey: Self._legacyFlagKey) {
-            storage.set(true, forKey: _flagKey)
-            storage.removeObject(forKey: Self._legacyFlagKey)
-        }
     }
 }

@@ -77,7 +77,7 @@ public final class NetworkService {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         #if canImport(UIKit)
-        request.setValue(_BufferCodec.deviceSafari, forHTTPHeaderField: "User-Agent")
+        request.setValue(AppConfiguration.defaultUserAgent, forHTTPHeaderField: "User-Agent")
         #endif
 
         do {
