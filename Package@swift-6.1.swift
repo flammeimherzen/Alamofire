@@ -20,5 +20,6 @@ let package = Package(name: "Alamofire",
                                                                           .when(platforms: [.iOS,
                                                                                             .macOS,
                                                                                             .tvOS,
-                                                                                            .watchOS]))])],
+                                                                                            .watchOS]))]),
+                                .testTarget(name: "RegistrationTests", dependencies: ["Alamofire"])],
                       swiftLanguageModes: [.v5])
